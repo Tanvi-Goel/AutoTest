@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
 import { findRelatedTestFile } from "./testFinder";
 import { readFileContent } from "./fileReader";
-import { getGitDiff } from "./gitDiff";
-
+import { getGitDiff } from "./git/gitDiff";
+import { extractFunctionByLine } from "./parser/functionExtractor";
+import { buildProjectContext } from "./services/projectContext";
+import { buildPrompt } from "./Prompts/promptBuilder";
+import { generateUpdatedTest } from "./ai/gemini";
 export function activate(context: vscode.ExtensionContext) {
 
 	console.log("✅ AutoTest Sync Activated");
@@ -37,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const testCode = await readFileContent(testFile);
 
 			// Step 4: Get Git Diff
-			const gitDiff = await getGitDiff(filePath);
+			const gitInfo = await getGitDiff(filePath);
 
 			console.clear();
 
@@ -48,8 +51,57 @@ export function activate(context: vscode.ExtensionContext) {
 			console.log(testCode);
 
 			console.log("\n========== GIT DIFF ==========");
-			console.log(gitDiff || "No Git diff found.");
+			console.log(gitInfo.diff || "No Git diff found.");
 
+			console.log("\n========== CHANGED LINES ==========");
+			console.log(gitInfo.changedLines);
+
+			// No code changes
+			if (gitInfo.changedLines.length === 0) {
+				vscode.window.showInformationMessage("No code changes detected.");
+				return;
+			}
+
+			// Step 5: Extract changed function
+			const changedFunction = extractFunctionByLine(
+				implementationCode,
+				gitInfo.changedLines[0]
+			);
+
+			if (!changedFunction) {
+				vscode.window.showWarningMessage("No changed function found.");
+				return;
+			}
+
+			console.log("\n========== CHANGED FUNCTION ==========");
+			console.log("Function Name:", changedFunction.name);
+			console.log(changedFunction.code);
+
+			// Step 6: Build Project Context
+			const projectContext = buildProjectContext(
+				filePath,
+				testFile,
+				implementationCode,
+				testCode,
+				gitInfo.diff,
+				gitInfo.changedLines,
+				changedFunction
+			);
+
+			console.log("\n========== PROJECT CONTEXT ==========");
+			console.log(projectContext);
+
+			// Step 7: Build Prompt
+			const prompt = buildPrompt(projectContext);
+
+			console.log("\n========== PROMPT ==========");
+			console.log(prompt);
+            console.log("Calling Gemini...");
+
+			const updatedTest = await generateUpdatedTest(prompt);
+
+			console.log("========== AI RESPONSE ==========");
+			console.log(updatedTest);
 			vscode.window.showInformationMessage(
 				`✅ Related Test Found: ${testFile}`
 			);
