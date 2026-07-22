@@ -6,6 +6,9 @@ import { extractFunctionByLine } from "./parser/functionExtractor";
 import { buildProjectContext } from "./services/projectContext";
 import { buildPrompt } from "./Prompts/promptBuilder";
 import { generateUpdatedTest } from "./ai/gemini";
+import { showTestDiff } from "./services/diffService";
+import { cleanupTempFile } from "./services/cleanupService";
+import { applyTestUpdate } from "./services/applyTestUpdate";
 export function activate(context: vscode.ExtensionContext) {
 
 	console.log("✅ AutoTest Sync Activated");
@@ -99,7 +102,34 @@ export function activate(context: vscode.ExtensionContext) {
             console.log("Calling Gemini...");
 
 			const updatedTest = await generateUpdatedTest(prompt);
+					const tempFile = await showTestDiff(
+			testFile,
+			updatedTest
+		);
+const choice = await vscode.window.showInformationMessage(
+    "Replace the existing test with the AI generated test?",
+    "Accept",
+    "Reject"
+);
+if (choice === "Accept") {
 
+    applyTestUpdate(testFile, updatedTest);
+
+    cleanupTempFile(tempFile);
+
+    vscode.window.showInformationMessage(
+        "✅ Test file updated successfully."
+    );
+
+} else {
+
+    cleanupTempFile(tempFile);
+
+    vscode.window.showInformationMessage(
+        "❌ AI changes discarded."
+    );
+
+}
 			console.log("========== AI RESPONSE ==========");
 			console.log(updatedTest);
 			vscode.window.showInformationMessage(
