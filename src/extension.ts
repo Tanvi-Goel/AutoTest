@@ -9,6 +9,9 @@ import { generateUpdatedTest } from "./ai/gemini";
 import { showTestDiff } from "./services/diffService";
 import { cleanupTempFile } from "./services/cleanupService";
 import { applyTestUpdate } from "./services/applyTestUpdate";
+import { handleError } from "./services/errorHandler";
+import { getAutoTestSyncConfig } from "./services/configService";
+import { detectTestFramework } from "./services/frameworkDetector";
 export function activate(context: vscode.ExtensionContext) {
 
 	console.log("✅ AutoTest Sync Activated");
@@ -18,7 +21,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const saveListener = vscode.workspace.onDidSaveTextDocument(async (document) => {
 
 		const filePath = document.fileName;
+        const config = getAutoTestSyncConfig();
 
+if (!config.enabled) {
+    return;
+}
 		// Ignore unsupported files
 		if (!supportedExtensions.some(ext => filePath.endsWith(ext))) {
 			return;
@@ -65,7 +72,10 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			// Step 5: Extract changed function
+
+
+
+			//Step 5: Extract changed function
 			const changedFunction = extractFunctionByLine(
 				implementationCode,
 				gitInfo.changedLines[0]
@@ -81,69 +91,122 @@ export function activate(context: vscode.ExtensionContext) {
 			console.log(changedFunction.code);
 
 			// Step 6: Build Project Context
-			const projectContext = buildProjectContext(
-				filePath,
-				testFile,
-				implementationCode,
-				testCode,
-				gitInfo.diff,
-				gitInfo.changedLines,
-				changedFunction
+			await vscode.window.withProgress(
+    {
+        location: vscode.ProgressLocation.Notification,
+        title: "AutoTestSync is updating tests...",
+        cancellable: false
+    },
+    async (progress) => {
+
+        progress.report({
+            increment: 10,
+            message: "Building project context..."
+        });
+const framework =
+    detectTestFramework(filePath);
+
+console.log("Framework:", framework);
+        const projectContext = buildProjectContext(
+            filePath,
+            testFile,
+            implementationCode,
+            testCode,
+            gitInfo.diff,
+            gitInfo.changedLines,
+            changedFunction,
+			framework
+        );
+
+        progress.report({
+            increment: 30,
+            message: "Generating prompt..."
+        });
+
+        const prompt = buildPrompt(projectContext);
+
+        console.log("\n========== PROMPT ==========");
+        console.log(prompt);
+
+        progress.report({
+            increment: 30,
+            message: "Calling Gemini..."
+        });
+
+					const updatedTest =
+			await generateUpdatedTest(
+				prompt,
+				config.model,
+				config.temperature
 			);
+		// Remove extra spaces before comparing
+		const normalize = (text: string) =>
+			text.replace(/\r\n/g, "\n").trim();
 
-			console.log("\n========== PROJECT CONTEXT ==========");
-			console.log(projectContext);
+		if (normalize(updatedTest) === normalize(testCode)) {
+			vscode.window.showInformationMessage(
+				"✅ Test file is already up to date."
+			);
+			return;
+		}
 
-			// Step 7: Build Prompt
-			const prompt = buildPrompt(projectContext);
+        progress.report({
+            increment: 20,
+            message: "Preparing diff..."
+        });
 
-			console.log("\n========== PROMPT ==========");
-			console.log(prompt);
-            console.log("Calling Gemini...");
+        let tempFile = "";
 
-			const updatedTest = await generateUpdatedTest(prompt);
-					const tempFile = await showTestDiff(
-			testFile,
-			updatedTest
-		);
-const choice = await vscode.window.showInformationMessage(
-    "Replace the existing test with the AI generated test?",
-    "Accept",
-    "Reject"
-);
-if (choice === "Accept") {
+if (config.autoOpenDiff) {
 
-    applyTestUpdate(testFile, updatedTest);
-
-    cleanupTempFile(tempFile);
-
-    vscode.window.showInformationMessage(
-        "✅ Test file updated successfully."
-    );
-
-} else {
-
-    cleanupTempFile(tempFile);
-
-    vscode.window.showInformationMessage(
-        "❌ AI changes discarded."
+    tempFile = await showTestDiff(
+        testFile,
+        updatedTest
     );
 
 }
-			console.log("========== AI RESPONSE ==========");
-			console.log(updatedTest);
+
+        const choice = await vscode.window.showInformationMessage(
+            "Replace the existing test with the AI generated test?",
+            "Accept",
+            "Reject"
+        );
+
+        if (choice === "Accept") {
+
+            applyTestUpdate(testFile, updatedTest);
+
+            cleanupTempFile(tempFile);
+
+            vscode.window.showInformationMessage(
+                "✅ Test file updated successfully."
+            );
+
+        } else {
+
+            cleanupTempFile(tempFile);
+
+            vscode.window.showInformationMessage(
+                "❌ AI changes discarded."
+            );
+        }
+
+        progress.report({
+            increment: 10,
+            message: "Completed"
+        });
+
+    }
+);
 			vscode.window.showInformationMessage(
 				`✅ Related Test Found: ${testFile}`
 			);
 
 		} catch (error) {
 
-			console.error(error);
+   			 handleError(error);
 
-			vscode.window.showErrorMessage(
-				"❌ Failed to process files."
-			);
-		}
+			}
 
 	});
 

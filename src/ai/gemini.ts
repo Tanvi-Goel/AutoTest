@@ -29,9 +29,10 @@ if (envFilePath) {
 }
 
 const API_KEY = process.env.OPENROUTER_API_KEY;
-
-export async function generateUpdatedTest(
-    prompt: string
+    export async function generateUpdatedTest(
+    prompt: string,
+    model: string,
+    temperature: number
 ): Promise<string> {
 
     if (!API_KEY) {
@@ -49,7 +50,7 @@ export async function generateUpdatedTest(
                 "X-Title": "AutoTestSync"
             },
             body: JSON.stringify({
-                model: "google/gemini-2.5-flash-lite",
+                model,
                 messages: [
                     {
                         role: "system",
@@ -60,7 +61,7 @@ export async function generateUpdatedTest(
                         content: prompt
                     }
                 ],
-                temperature: 0.2
+                temperature
             })
         }
     );
@@ -75,8 +76,16 @@ export async function generateUpdatedTest(
     console.log(JSON.stringify(data, null, 2));
 
     if (!response.ok) {
-        throw new Error(JSON.stringify(data, null, 2));
-    }
+
+    const errorMessage =
+        data?.error?.message ||
+        response.statusText ||
+        "Unknown API Error";
+
+    throw new Error(
+        `${response.status} - ${errorMessage}`
+    );
+}
 
     // return (
     //     data?.choices?.[0]?.message?.content ??
@@ -84,6 +93,9 @@ export async function generateUpdatedTest(
     // );
     let generatedCode =
     data?.choices?.[0]?.message?.content ?? "No response received.";
+    if (!generatedCode.trim()) {
+    throw new Error("AI returned an empty response.");
+}
 
 generatedCode = generatedCode
     .replace(/^```[a-zA-Z]*\n?/, "")

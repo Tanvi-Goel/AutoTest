@@ -20,7 +20,34 @@
         "command": "auto-test-sync.helloWorld",
         "title": "Hello World"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "AutoTestSync",
+      "properties": {
+        "autotestsync.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AutoTestSync when files are saved."
+        },
+        "autotestsync.model": {
+          "type": "string",
+          "default": "google/gemini-2.5-flash-lite",
+          "description": "AI model used to generate updated tests."
+        },
+        "autotestsync.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Temperature used for AI generation."
+        },
+        "autotestsync.autoOpenDiff": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically open the VS Code diff editor."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

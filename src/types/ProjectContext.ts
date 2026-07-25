@@ -18,4 +18,5 @@ export interface ProjectContext {
     changedLines: number[];
 
     changedFunction: ChangedFunction | null;
+    framework: string;
 }

@@ -1,22 +1,13 @@
-import { ProjectContext, ChangedFunction } from "../types/ProjectContext";
-
 export function buildProjectContext(
-
     implementationPath: string,
-
     testPath: string,
-
     implementationCode: string,
-
     testCode: string,
-
     gitDiff: string,
-
     changedLines: number[],
-
-    changedFunction: ChangedFunction | null
-
-): ProjectContext {
+    changedFunction: any,
+    framework: string
+) {
 
     return {
 
@@ -32,7 +23,9 @@ export function buildProjectContext(
 
         changedLines,
 
-        changedFunction
+        changedFunction,
+
+        framework
 
     };
 
