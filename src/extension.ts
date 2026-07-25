@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { findRelatedTestFile } from "./testFinder";
+// import { findRelatedTestFile } from "./testFinder";
+import { findAllRelatedTests } from "./services/findAllRelatedTests";
 import { readFileContent } from "./fileReader";
 import { getGitDiff } from "./git/gitDiff";
 import { extractFunctionByLine } from "./parser/functionExtractor";
@@ -12,6 +13,7 @@ import { applyTestUpdate } from "./services/applyTestUpdate";
 import { handleError } from "./services/errorHandler";
 import { getAutoTestSyncConfig } from "./services/configService";
 import { detectTestFramework } from "./services/frameworkDetector";
+import { validateGeneratedTest } from "./services/testValidator";
 export function activate(context: vscode.ExtensionContext) {
 
 	console.log("✅ AutoTest Sync Activated");
@@ -36,12 +38,38 @@ if (!config.enabled) {
 		try {
 
 			// Step 1: Find related test file
-			const testFile = await findRelatedTestFile(filePath);
+			const testFiles = await findAllRelatedTests(filePath);
 
-			if (!testFile) {
+			if (testFiles.length === 0) {
 				vscode.window.showWarningMessage("❌ No related test file found.");
 				return;
-			}
+			} 
+			let testFile = testFiles[0];
+
+if (testFiles.length > 1) {
+
+    const selected =
+        await vscode.window.showQuickPick(
+
+            testFiles.map(file => ({
+                label: file.split(/[\\/]/).pop()!,
+                description: file
+            })),
+
+            {
+                placeHolder:
+                    "Select the test file to update"
+            }
+
+        );
+
+    if (!selected) {
+        return;
+    }
+
+    testFile = selected.description!;
+
+}
 
 			// Step 2: Read implementation
 			const implementationCode = await readFileContent(filePath);
@@ -139,6 +167,21 @@ console.log("Framework:", framework);
 				config.model,
 				config.temperature
 			);
+			const validation =
+    validateGeneratedTest(updatedTest);
+
+if (!validation.valid) {
+
+    vscode.window.showErrorMessage(
+        `❌ AI generated invalid test.\n\n${validation.error}`
+    );
+
+    return;
+
+}
+console.log("========== VALIDATION ==========");
+
+console.log(validation);
 		// Remove extra spaces before comparing
 		const normalize = (text: string) =>
 			text.replace(/\r\n/g, "\n").trim();
