@@ -40,10 +40,10 @@ if (!config.enabled) {
 			// Step 1: Find related test file
 			const testFiles = await findAllRelatedTests(filePath);
 
-			if (testFiles.length === 0) {
-				vscode.window.showWarningMessage("❌ No related test file found.");
-				return;
-			} 
+			// if (testFiles.length === 0) {
+			// 	vscode.window.showWarningMessage("❌ No related test file found.");
+			// 	return;
+			// } 
 			let testFile = testFiles[0];
 
 if (testFiles.length > 1) {
@@ -108,6 +108,14 @@ if (testFiles.length > 1) {
 				implementationCode,
 				gitInfo.changedLines[0]
 			);
+			console.log("========== EXTRACTED FUNCTION ==========");
+
+if (changedFunction) {
+    console.log(changedFunction.name);
+    console.log(changedFunction.code);
+} else {
+    console.log("No function extracted");
+}
 
 			if (!changedFunction) {
 				vscode.window.showWarningMessage("No changed function found.");
